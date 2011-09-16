@@ -1,0 +1,6 @@
+{{range $.Flashes}}
+<div class="alert-message {{html .Kind}}">
+	<a class="close" href="#">×</a>
+	<p>{{html .Text}}</p>
+</div>
+{{end}}

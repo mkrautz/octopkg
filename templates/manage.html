@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <title>octopkg</title>
+ {{template "head.html" $}}
+</head>
+<body>
+{{template "modals.html" $}}
+{{template "topbar.html" $}}
+
+<div id="maincontent" class="container">
+<h1>Existing Repos</h1>
+{{if $.Repos}}
+<table class="zebra-striped">
+<thead>
+  <tr>
+    <th>Name</th>
+    <th>Description</th>
+  </tr>
+</thead>
+<tbody>
+  {{range $.Repos}}
+  <tr>
+    <td><a href="/manage/{{.Name}}">{{html .Name}}</a></td>
+    <td>{{html .Description}}</td>
+  </tr>
+  {{end}}
+</tbody>
+</table>
+{{else}}
+No repositories found.
+{{end}}
+<br /><br />
+ 
+<h1>Create New Repo</h1>
+<form class="form-stacked" method="post" action="/manage/create-repo">
+ <fieldset>
+        <div class="clearfix">
+              <label for="username">Name</label>
+            <div class="input">
+                    <input class="xlarge" id="name" name="name" size="30" type="text" />
+            </div>
+          </div>
+          <div class="clearfix">
+              <label for="password">Description</label>
+            <div class="input">
+                    <input class="xlarge" id="description" name="description" size="30" type="text" />
+            </div>
+          </div>
+        </fieldset>
+        <div class="actions">
+            <input type="submit" class="btn primary" value="Create" />
+        </div>
+ </fieldset>
+</form>
+
+</div>
+</body>
+</html>

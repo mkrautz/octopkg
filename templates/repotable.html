@@ -1,0 +1,20 @@
+{{if $}}
+<table class="zebra-striped">
+<thead>
+  <tr>
+    <th>Name</th>
+    <th>Owner</th>
+  </tr>
+</thead>
+<tbody>
+  {{range $}}
+  <tr>
+    <td><a href="/{{.Name}}">{{html .Name}}</a></td>
+    <td><a href="/~{{.Owner}}">{{html .Owner}}</a></td>
+  </tr>
+  {{end}}
+</tbody>
+</table>
+{{else}}
+No repositories found.
+{{end}}

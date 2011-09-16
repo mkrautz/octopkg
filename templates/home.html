@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <title>octopkg</title>
+ {{template "head.html" $}}
+</head>
+<body>
+	{{template "modals.html" $}}
+	{{template "topbar.html" $}}
+
+	<div id="maincontent" class="container">
+	{{template "flashes.html" $}}
+  
+ 	<h1>All Repositories</h1>
+ 	{{template "repotable.html" $.Repos}}
+ 	</div>
+
+ </body>
+</html>

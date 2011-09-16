@@ -1,0 +1,4 @@
+{
+	"SessionHMACSecret":  "/* Hex encoded HMAC secret */",
+	"SessionAESSecret":   "/* Hex encoded AES secret. Use 16, 24, or 32 bytes (a hex string of 32, 48 or 64 characters) to select AES-128, AES-192, or AES-256 */"
+}

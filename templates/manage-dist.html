@@ -1,0 +1,20 @@
+<html>
+ <head>
+  <title>octopkg</title>
+   {{template "head.html" $}}
+ </head>
+ <body>
+ {{template "modals.html" $}}
+ {{template "topbar.html" $}}
+  <div id="maincontent" class="container">
+   <h1>Manage Distribution: {{html .Dist.Name}} of {{html .Repo.Name}}</h1>
+   
+    <p>To upload a package to this distribution, please execute:</p>
+    <blockquote>
+    <pre>curl --basic --user "USERNAME:PASSWORD" \
+  --data-binary @FILE.deb \
+  https://octopkg.appspot.com/manage/grumble-snapshot/natty/upload-pkg</pre>
+    </blockquote>
+  </div>
+ </body>
+</html>

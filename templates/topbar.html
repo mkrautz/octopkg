@@ -1,0 +1,30 @@
+<div class="topbar-wrapper" style="z-index: 5;">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="container">
+          <h3><a href="/">octopkg <small style="color: red;">alpha</small></a></h3>
+          <ul class="nav">
+            <li><a href="/">Home</a></li>
+            {{if $.User}}
+              <li><a href="/manage">Manage</a></li>
+            {{end}}
+          </ul>
+          <ul class="nav secondary-nav">
+            {{if $.User}}
+              <li class="dropdown" data-dropdown="true">
+                <a href="#" class="dropdown-toggle"><img src="{{$.User.GravatarURL 16}}" />&nbsp;{{html $.User.Username}}</a>
+                <ul class="dropdown-menu">
+                  <li><a href="/manage">Manage Repositories</a></li>
+                  <li class="divider"></li>
+                  <li><a href="/logout">Log out</a></li>
+                </ul>
+              </li>
+            {{else}}
+            	<li><a href="#" data-controls-modal="modal-create-account" data-backdrop="true" data-keyboard="true">Create Account</a></li>
+            	<li><a href="#" data-controls-modal="modal-login" data-backdrop="true" data-keyboard="true">Log in</a></li>
+            {{end}}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
