@@ -48,7 +48,10 @@ var tmplSet = template.SetMust(template.ParseTemplateFiles(
 	"templates/repotable.html",
 ))
 
-var updateRepoTask = delay.Func("updateRepo", updateRepoHandler)
+var (
+	generateRepoKeysTask = delay.Func("generateRepoKeys", generateRepoKeysHandler)
+	updateRepoTask = delay.Func("updateRepo", updateRepoHandler)
+)
 
 func init() {
 	mux.HandleFunc("/", homeHandler)
@@ -218,20 +221,6 @@ func repoCreationHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Create a PGP signing keypair for the new repo
-	entity, err := openpgp.NewEntity(rand.Reader, time.Seconds(), fmt.Sprintf("octopkg: %v", repo.Name), "", "")
-	if err != nil {
-		http.Error(rw, fmt.Sprintf("unable to create entity: %v", err), 500)
-		return
-	}
-	buf := new(bytes.Buffer)
-	err = entity.SerializePrivate(buf)
-	if err != nil {
-		http.Error(rw, fmt.Sprintf("unable to serialize identity: %v", err), 500)
-		return
-	}
-	repo.PGPKeyRing = buf.Bytes()
-
 	err = datastore.RunInTransaction(ctx, func(ctx appengine.Context) os.Error {
 		key := datastore.NewKey("Repository", repo.Name, 0, nil)
 
@@ -257,7 +246,39 @@ func repoCreationHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	generateRepoKeysTask.Call(ctx, repo.Name)
+
 	http.Redirect(rw, req, "/manage", 307)
+}
+
+// Generate or regenerate the cryptographic keys for a given repository.
+func generateRepoKeysHandler(ctx appengine.Context, repoName string) os.Error {
+	repo := Repository{}
+	key := datastore.NewKey("Repository", repoName, 0, nil)
+	err := datastore.Get(ctx, key, &repo)
+	if err != nil {
+		return fmt.Errorf("unable to generate keys: %v", err)
+	}
+
+	// Create a PGP signing keypair for the new repo
+	entity, err := openpgp.NewEntity(rand.Reader, time.Seconds(), fmt.Sprintf("octopkg: %v", repo.Name), "", "")
+	if err != nil {
+		return fmt.Errorf("unable to create pgp entity: %v", err)
+	}
+	buf := new(bytes.Buffer)
+	err = entity.SerializePrivate(buf)
+	if err != nil {
+		return fmt.Errorf("unable to serialize entity: %v", err)
+	}
+	repo.PGPKeyRing = buf.Bytes()
+
+	// Put the modified repo
+	_, err = datastore.Put(ctx, key, &repo)
+	if err != nil {
+		return fmt.Errorf("unable to put upadted repo: %v", err)
+	}
+
+	return nil
 }
 
 // Manage a specific repository.
