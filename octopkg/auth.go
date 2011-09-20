@@ -171,10 +171,18 @@ func loginHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if _, exists := session["user"]; exists {
+	// Check if the requestor is already logged in.
+	currentUser, err := GetUser(req)
+	if err != nil {
+		ctx.Errorf("unable to GetUser: %v", err)
 		http.Error(rw, "page not found", 404)
 		return
 	}
+	if currentUser != nil {
+		ctx.Infof("GetUser returned non-nil user")
+		http.Error(rw, "page not found", 404)
+		return
+	}	
 
 	username := req.FormValue("username")
 	password := req.FormValue("password")
@@ -221,8 +229,15 @@ func accountCreateHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Check for already logged-in user
-	if _, exists := session["user"]; exists {
+	// Check if the requestor is already logged in.
+	currentUser, err := GetUser(req)
+	if err != nil {
+		ctx.Errorf("unable to GetUser: %v", err)
+		http.Error(rw, "page not found", 404)
+		return
+	}
+	if currentUser != nil {
+		ctx.Infof("GetUser returned non-nil user")
 		http.Error(rw, "page not found", 404)
 		return
 	}
