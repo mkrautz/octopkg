@@ -202,7 +202,7 @@ func loginHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	http.Error(rw, "page not found", 404)
+	http.Redirect(rw, req, "/", 307)
 }
 
 func logoutHandler(rw http.ResponseWriter, req *http.Request) {
