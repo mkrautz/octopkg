@@ -48,7 +48,7 @@ func GetUser(req *http.Request) (*User, os.Error) {
 	}
 
 	user := User{}
-	key := datastore.NewKey("User", username, 0, nil)
+	key := datastore.NewKey(ctx, "User", username, 0, nil)
 	err = datastore.Get(ctx, key, &user)
 	if err == datastore.ErrNoSuchEntity {
 		return nil, nil
@@ -81,7 +81,7 @@ func SaltPassword(salt []byte, pw string) (string, os.Error) {
 // and password combination is valid for a given user.
 func CheckBasicAuth(req *http.Request) (*User, os.Error) {
 	auth := req.Header.Get("Authorization")
-	parts := strings.Split(auth, " ", -1)
+	parts := strings.Split(auth, " ")
 	if len(parts) != 2 {
 		return nil, os.NewError("auth: Split Authorization header does not contain two parts")
 	}
@@ -95,7 +95,7 @@ func CheckBasicAuth(req *http.Request) (*User, os.Error) {
 		return nil, os.NewError("auth: Unable to base64-decode Authorization header")
 	}
 
-	parts = strings.Split(string(usernamePasswordPair), ":", -1)
+	parts = strings.Split(string(usernamePasswordPair), ":")
 	if len(parts) != 2 {
 		return nil, os.NewError("auth: unable to split username-password pair into two parts (couldn't find :)")
 	}
@@ -105,7 +105,7 @@ func CheckBasicAuth(req *http.Request) (*User, os.Error) {
 
 	ctx := appengine.NewContext(req)
 	user := User{}
-	key := datastore.NewKey("User", username, 0, nil)
+	key := datastore.NewKey(ctx, "User", username, 0, nil)
 	err = datastore.Get(ctx, key, &user)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (u *User) SetPassword(pw string) os.Error {
 }
 
 func (u *User) CheckPassword(pw string) bool {
-	split := strings.Split(u.Password, "$", -1)
+	split := strings.Split(u.Password, "$")
 	if len(split) != 3 {
 		return false
 	}
@@ -182,13 +182,13 @@ func loginHandler(rw http.ResponseWriter, req *http.Request) {
 		ctx.Infof("GetUser returned non-nil user")
 		http.Error(rw, "page not found", 404)
 		return
-	}	
+	}
 
 	username := req.FormValue("username")
 	password := req.FormValue("password")
 
 	user := User{}
-	key := datastore.NewKey("User", username, 0, nil)
+	key := datastore.NewKey(ctx, "User", username, 0, nil)
 	err = datastore.Get(ctx, key, &user)
 	if err == datastore.ErrNoSuchEntity {
 		http.Redirect(rw, req, "/", 307)
@@ -294,7 +294,7 @@ func accountCreateHandler(rw http.ResponseWriter, req *http.Request) {
 
 	user.SetPassword(password)
 
-	key := datastore.NewKey("User", user.Username, 0, nil)
+	key := datastore.NewKey(ctx, "User", user.Username, 0, nil)
 	err = datastore.RunInTransaction(ctx, func(ctx appengine.Context) os.Error {
 		err := datastore.Get(ctx, key, &user)
 		if err == datastore.ErrNoSuchEntity {
@@ -308,7 +308,7 @@ func accountCreateHandler(rw http.ResponseWriter, req *http.Request) {
 			return err
 		}
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
 		return

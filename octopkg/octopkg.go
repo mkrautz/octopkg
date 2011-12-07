@@ -6,7 +6,6 @@ package octopkg
 
 import (
 	"appengine"
-	"appengine-go-backports/template"
 	"appengine/blobstore"
 	"appengine/datastore"
 	"appengine/delay"
@@ -33,6 +32,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"template"
 	"time"
 )
 
@@ -50,32 +50,33 @@ var tmplSet = template.SetMust(template.ParseTemplateFiles(
 
 var (
 	generateRepoKeysTask = delay.Func("generateRepoKeys", generateRepoKeysHandler)
-	updateRepoTask = delay.Func("updateRepo", updateRepoHandler)
+	updateRepoTask       = delay.Func("updateRepo", updateRepoHandler)
+	router               = new(mux.Router)
 )
 
 func init() {
-	mux.HandleFunc("/", homeHandler)
-	mux.HandleFunc("/manage", manageHandler)
-	mux.HandleFunc("/manage/create-repo", repoCreationHandler)
-	mux.HandleFunc("/manage/{repo}", manageRepoHandler)
-	mux.HandleFunc("/manage/{repo}/create-dist", distCreationHandler)
-	mux.HandleFunc("/manage/{repo}/{distribution}", manageDistHandler)
-	mux.HandleFunc("/manage/{repo}/{distribution}/upload-pkg", uploadPkgHandler)
+	router.HandleFunc("/", homeHandler)
+	router.HandleFunc("/manage", manageHandler)
+	router.HandleFunc("/manage/create-repo", repoCreationHandler)
+	router.HandleFunc("/manage/{repo}", manageRepoHandler)
+	router.HandleFunc("/manage/{repo}/create-dist", distCreationHandler)
+	router.HandleFunc("/manage/{repo}/{distribution}", manageDistHandler)
+	router.HandleFunc("/manage/{repo}/{distribution}/upload-pkg", uploadPkgHandler)
 
-	mux.HandleFunc("/login", loginHandler)
-	mux.HandleFunc("/logout", logoutHandler)
-	mux.HandleFunc("/create", accountCreateHandler)
+	router.HandleFunc("/login", loginHandler)
+	router.HandleFunc("/logout", logoutHandler)
+	router.HandleFunc("/create", accountCreateHandler)
 
-	mux.HandleFunc("/~{username}", userPageHandler)
+	router.HandleFunc("/~{username}", userPageHandler)
 
-	mux.HandleFunc("/{repo}", repoHandler)
-	mux.HandleFunc("/{repo}/pubkey.pgp", repoPubKeyHandler)
-	mux.HandleFunc("/{repo}/apt/dists/{distribution}/main/binary-{arch}/Packages", debianPackages)
-	mux.HandleFunc("/{repo}/apt/dists/{distribution}/Release", debianRelease)
-	mux.HandleFunc("/{repo}/apt/dists/{distribution}/Release.gpg", debianReleasePgp)
-	mux.HandleFunc("/{repo}/apt/pkgs/{distribution}/{filename}", debianFileHandler)
+	router.HandleFunc("/{repo}", repoHandler)
+	router.HandleFunc("/{repo}/pubkey.pgp", repoPubKeyHandler)
+	router.HandleFunc("/{repo}/apt/dists/{distribution}/main/binary-{arch}/Packages", debianPackages)
+	router.HandleFunc("/{repo}/apt/dists/{distribution}/Release", debianRelease)
+	router.HandleFunc("/{repo}/apt/dists/{distribution}/Release.gpg", debianReleasePgp)
+	router.HandleFunc("/{repo}/apt/pkgs/{distribution}/{filename}", debianFileHandler)
 
-	http.Handle("/", mux.DefaultRouter)
+	http.Handle("/", router)
 }
 
 // State that we expect a number of vars to be present
@@ -222,13 +223,13 @@ func repoCreationHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	err = datastore.RunInTransaction(ctx, func(ctx appengine.Context) os.Error {
-		key := datastore.NewKey("Repository", repo.Name, 0, nil)
+		key := datastore.NewKey(ctx, "Repository", repo.Name, 0, nil)
 
 		// Is there already a repository with this name? Don't allow us to overwrite it.
 		existingRepo := Repository{}
 		err := datastore.Get(ctx, key, &existingRepo)
 		if err == datastore.ErrNoSuchEntity {
-			_, err := datastore.Put(ctx, datastore.NewKey("Repository", repo.Name, 0, nil), &repo)
+			_, err := datastore.Put(ctx, datastore.NewKey(ctx, "Repository", repo.Name, 0, nil), &repo)
 			if err != nil {
 				return err
 			}
@@ -240,7 +241,7 @@ func repoCreationHandler(rw http.ResponseWriter, req *http.Request) {
 			}
 		}
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
 		return
@@ -254,7 +255,7 @@ func repoCreationHandler(rw http.ResponseWriter, req *http.Request) {
 // Generate or regenerate the cryptographic keys for a given repository.
 func generateRepoKeysHandler(ctx appengine.Context, repoName string) os.Error {
 	repo := Repository{}
-	key := datastore.NewKey("Repository", repoName, 0, nil)
+	key := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 	err := datastore.Get(ctx, key, &repo)
 	if err != nil {
 		return fmt.Errorf("unable to generate keys: %v", err)
@@ -311,7 +312,7 @@ func manageRepoHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	repoName := vars["repo"]
 
-	key := datastore.NewKey("Repository", repoName, 0, nil)
+	key := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 	err = datastore.Get(ctx, key, &args.Repo)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
@@ -370,7 +371,7 @@ func distCreationHandler(rw http.ResponseWriter, req *http.Request) {
 
 	// Look up the repository
 	repo := Repository{}
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 	err = datastore.Get(ctx, repoKey, &repo)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
@@ -396,7 +397,7 @@ func distCreationHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	err = datastore.RunInTransaction(ctx, func(ctx appengine.Context) os.Error {
-		key := datastore.NewKey("Distribution", dist.Name, 0, repoKey)
+		key := datastore.NewKey(ctx, "Distribution", dist.Name, 0, repoKey)
 		// Is there already a distribution with this name and ancestor? Don't allow us to overwrite it.
 		existingDist := Distribution{}
 		err := datastore.Get(ctx, key, &existingDist)
@@ -413,7 +414,7 @@ func distCreationHandler(rw http.ResponseWriter, req *http.Request) {
 			}
 		}
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
 		return
@@ -453,14 +454,14 @@ func manageDistHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	args.User = user
 
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 	err = datastore.Get(ctx, repoKey, &args.Repo)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
 		return
 	}
 
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
 	err = datastore.Get(ctx, distKey, &args.Dist)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
@@ -487,6 +488,8 @@ func manageDistHandler(rw http.ResponseWriter, req *http.Request) {
 // Expected vars:   repo, distribution
 // Requires login:  Requires login and ownership of the repository.
 func uploadPkgHandler(rw http.ResponseWriter, req *http.Request) {
+	ctx := appengine.NewContext(req)
+
 	if req.Method != "POST" {
 		http.Error(rw, "handler requires POST requests", 404)
 		return
@@ -494,15 +497,16 @@ func uploadPkgHandler(rw http.ResponseWriter, req *http.Request) {
 
 	user, err := CheckBasicAuth(req)
 	if err != nil {
+		ctx.Errorf("%v", err)
 		http.Error(rw, "forbidden", 403)
 		return
 	}
 	if user == nil {
+		ctx.Errorf("bad username/pw combo")
 		http.Error(rw, "forbidden", 403)
 		return
 	}
 
-	ctx := appengine.NewContext(req)
 	vars := mux.Vars(req)
 	err = expectVars(vars, "repo", "distribution")
 	if err != nil {
@@ -519,7 +523,7 @@ func uploadPkgHandler(rw http.ResponseWriter, req *http.Request) {
 		Dist Distribution
 	}{}
 
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 	err = datastore.Get(ctx, repoKey, &args.Repo)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
@@ -531,7 +535,7 @@ func uploadPkgHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
 	err = datastore.Get(ctx, distKey, &args.Dist)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
@@ -710,7 +714,7 @@ func uploadPkgHandler(rw http.ResponseWriter, req *http.Request) {
 	pkg.SHA1 = hex.EncodeToString(sha1er.Sum())
 	pkg.SHA256 = hex.EncodeToString(sha256er.Sum())
 
-	pkgKey := datastore.NewKey("Package", pkg.Name+"_"+pkg.Arch, 0, distKey)
+	pkgKey := datastore.NewKey(ctx, "Package", pkg.Name+"_"+pkg.Arch, 0, distKey)
 	_, err = datastore.Put(ctx, pkgKey, &pkg)
 	if err != nil {
 		http.Error(rw, err.String(), 500)
@@ -730,14 +734,14 @@ func updateRepoHandler(ctx appengine.Context, repoName string, distName string) 
 		Dist Distribution
 	)
 
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 	err := datastore.Get(ctx, repoKey, &Repo)
 	if err != nil {
 		ctx.Errorf("unable to create new key: %v", err.String())
 		return
 	}
 
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
 	err = datastore.Get(ctx, distKey, &Dist)
 	if err != nil {
 		ctx.Errorf("unable to create new key: %v", err.String())
@@ -868,7 +872,7 @@ func updateRepoHandler(ctx appengine.Context, repoName string, distName string) 
 			pkgs.SHA1 = mhw.SHA1()
 			pkgs.SHA256 = mhw.SHA256()
 
-			key := datastore.NewKey("Packages", pkgs.Arch, 0, distKey)
+			key := datastore.NewKey(tc, "Packages", pkgs.Arch, 0, distKey)
 			_, err = datastore.Put(ctx, key, &pkgs)
 			if err != nil {
 				return err
@@ -878,7 +882,7 @@ func updateRepoHandler(ctx appengine.Context, repoName string, distName string) 
 		}
 
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		ctx.Errorf("%v", err)
 		return
@@ -1012,7 +1016,7 @@ func repoPubKeyHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	repoName := vars["repo"]
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
 
 	repo := Repository{}
 	err = datastore.Get(ctx, repoKey, &repo)
@@ -1076,8 +1080,8 @@ func debianPackages(rw http.ResponseWriter, req *http.Request) {
 	distName := vars["distribution"]
 	arch := vars["arch"]
 
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
 	packages := []*Packages{}
 
 	_, err = datastore.NewQuery("Packages").Ancestor(distKey).Filter("Arch =", arch).GetAll(ctx, &packages)
@@ -1127,8 +1131,8 @@ func debianRelease(rw http.ResponseWriter, req *http.Request) {
 	}
 	repoName := vars["repo"]
 	distName := vars["distribution"]
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
 
 	var Dist Distribution
 	err = datastore.Get(ctx, distKey, &Dist)
@@ -1158,8 +1162,8 @@ func debianReleasePgp(rw http.ResponseWriter, req *http.Request) {
 	}
 	repoName := vars["repo"]
 	distName := vars["distribution"]
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
 
 	var Dist Distribution
 	err = datastore.Get(ctx, distKey, &Dist)
@@ -1198,7 +1202,7 @@ func debianFileHandler(rw http.ResponseWriter, req *http.Request) {
 
 	// Split the requested fileName into name, version, arch
 	fileName = fileName[0 : len(fileName)-4]
-	components := strings.Split(fileName, "_", -1)
+	components := strings.Split(fileName, "_")
 	if len(components) != 3 {
 		ctx.Errorf("filename does not have 3 components after _ split")
 		http.Error(rw, "no such package", 404)
@@ -1209,9 +1213,9 @@ func debianFileHandler(rw http.ResponseWriter, req *http.Request) {
 	version := components[1]
 	arch := components[2]
 
-	repoKey := datastore.NewKey("Repository", repoName, 0, nil)
-	distKey := datastore.NewKey("Distribution", distName, 0, repoKey)
-	pkgKey := datastore.NewKey("Package", pkgName+"_"+arch, 0, distKey)
+	repoKey := datastore.NewKey(ctx, "Repository", repoName, 0, nil)
+	distKey := datastore.NewKey(ctx, "Distribution", distName, 0, repoKey)
+	pkgKey := datastore.NewKey(ctx, "Package", pkgName+"_"+arch, 0, distKey)
 
 	pkg := Package{}
 	err = datastore.Get(ctx, pkgKey, &pkg)
